@@ -1,5 +1,5 @@
 +++
-title = "Football Town"
+title = "Football.town"
 subtitle = "A page devoted to football analytics"
 hascode = true
 date = Date(2025, 11, 24)
