@@ -3,6 +3,7 @@ Add here global page variables to use throughout your website.
 -->
 +++
 root = "football.town"
+siteyear = 2025
 author = "Kyle S. Johnston"
 mintoclevel = 2
 
