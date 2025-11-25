@@ -9,6 +9,15 @@
   {{isdef title}} <title>{{fill title}}</title>  {{end}}
 </head>
 <body>
-{{insert sidebar.html}}
-
+  <div id="layout"> <!-- Closed in foot -->
+    {{insert sidebar.html}}
+    <div id="main"> <!-- Closed in foot -->
+      <div class="header">
+        <h1>{{fill title}}</h1>
+        {{isdef subtitle}}<h2>{{fill subtitle}}</h2>{{end}}
+        {{isdef rss_author}}{{isnotempty rss_author}}
+          <img width="24" height="24" alt="{{fill rss_author}}" class="post-avatar" src="https://github.com/{{fill rss_author}}.png?size=24">
+          <a href="https://github.com/{{fill rss_author}}">{{fill rss_author}}</a>
+        {{end}}{{end}}
+      </div>
 <!-- Content appended here -->

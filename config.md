@@ -2,7 +2,7 @@
 Add here global page variables to use throughout your website.
 -->
 +++
-root = "Football.town"
+root = "football.town"
 siteyear = 2025
 author = "KyleSJohnston"
 mintoclevel = 2

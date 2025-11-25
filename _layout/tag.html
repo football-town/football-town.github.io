@@ -7,14 +7,17 @@
   <title>{{isdef root}}{{fill root}} - {{end}}{{fill fd_tag}}</title>
 </head>
 <body>
-  {{insert sidebar.html}}
-  <div class="{{div_content}}">
-    <h1>Tag: {{fill fd_tag}}</h1>
-    {{taglist}}
-    {{insert page_foot.html}}
-  </div>
-  <!-- close what is opened in sidebar.html -->
-     </div> <!-- end of id=main -->
- </div> <!-- end of id=layout -->
+  <div id="layout"> <!-- Closed in foot -->
+    {{insert sidebar.html}}
+    <div id="main"> <!-- Closed in foot -->
+      <div class="header">
+        <h1>{{fill fd_tag}}</h1>
+      </div>
+      <div class="franklin-content">
+        {{taglist}}
+        {{insert page_foot.html}}
+      </div>
+    </div> <!-- end of id=main -->
+  </div> <!-- end of id=layout -->
 </body>
 </html>
