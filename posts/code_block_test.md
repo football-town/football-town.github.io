@@ -215,7 +215,7 @@ sum(df[!, :is_win]) == sum(df[!, :is_loss])
 sum(df[!, :is_tie]) % 2 == 0
 ```
 
-## Analysis
+## Aggregation
 
 We know from the [tiebreaking procedures](https://www.nfl.com/standings/tie-breaking-procedures) that ties count as a half-win for each team.
 Since we will be repeating this calculation a number of times, it is a good candidate for a function.
@@ -228,7 +228,13 @@ function winning_percentage(wins, losses, ties)
 end
 ```
 
-# TODO: CONTINUE HERE!
+For a dense representation of the record, we can combine it into a string.
+
+```!
+recordstr(wins, losses, ties) = "$wins - $losses - $ties"
+```
+
+We start by computing team totals.
 
 ```!
 total_df = @chain df begin
@@ -246,6 +252,12 @@ total_df = @chain df begin
     )
 end
 
+first(sort(total_df, :pct, rev=true), 5)
+```
+
+Then we compute the home, away, conference, and division records.
+
+```!
 location_df = @chain df begin
     groupby([:team, :is_home])
     combine(
@@ -256,7 +268,7 @@ location_df = @chain df begin
     transform(
         [:wins, :losses, :ties] => ((w,l,t) -> recordstr.(w,l,t)) => :record,
     )
-end
+end;
 
 division_df = @chain df begin
     groupby([:team, :is_division])
@@ -269,7 +281,7 @@ division_df = @chain df begin
         [:wins, :losses, :ties] => ((w,l,t) -> recordstr.(w, l ,t)) => :record,
         [:wins, :losses, :ties] => ((w,l,t) -> winning_percentage.(w, l ,t)) => :pct,
     )
-end
+end;
 
 conf_df = @chain df begin
     groupby([:team, :is_conf])
@@ -282,9 +294,13 @@ conf_df = @chain df begin
         [:wins, :losses, :ties] => ((w,l,t) -> recordstr.(w, l ,t)) => :record,
         [:wins, :losses, :ties] => ((w,l,t) -> winning_percentage.(w, l ,t)) => :pct,
     )
-end
+end;
+```
 
-@chain total_df begin
+Finally, we combine them into a single dataframe.
+
+```!
+final_df = @chain total_df begin
     leftjoin(
         team_df,
         on = :team,
@@ -314,11 +330,17 @@ end
         on = :team,
         renamecols = "" => "_non_conf",
     )
+end
+
+names(final_df)
+```
+
+Using this dataframe, let's show the league standings and see [how they compare](https://www.nfl.com/standings/league/2024/REG).
+```!
+@chain final_df begin
     select(
         :team,
         :name,
-        :conf,
-        :division,
         :wins,
         :losses,
         :ties,
@@ -326,28 +348,75 @@ end
         :points_for,
         :points_against,
         :net_pts,
-        :record_home,
-        :record_away,
-        :record_division,
-        :pct_division,
-        :record_conf,
-        :pct_conf,
-        :record_non_conf,
     )
-    sort([order(:pct, rev=true), order(:name)])
+    sort([
+        order(:pct, rev=true),
+        order(:name),
+    ])
+end
+```
+
+We really care about the conference standings.
+We'll use a simplified algorithm of computing division and wild-card tiebreakers.
+
+```!
+final_df[
+    final_df[!, :division] .== "AFC West",
+    :pct
+]
+```
+
+```!
+sortperm(final_df[
+    final_df[!, :division] .== "AFC West",
+    :pct
+]; rev=true)
+```
+
+```!
+@chain final_df begin
+    subset(:division => (x -> x .== "AFC West"))
+
+    transform(
+        :pct => (x -> sortperm(x, rev=true)) => :division_rank,
+    )
+    sort(:division_rank)
 end
 ```
 
 
----
-
 ```!
-
-
-recordstr(wins, losses, ties) = "$wins - $losses - $ties"
+rank_df = @chain final_df begin
+    groupby(:division)
+    transform(
+        :pct => (x -> sortperm(x, rev=true)) => :division_rank,
+    )
+    transform(
+        :division_rank => (x -> x .== 1) => :division_leader,
+    )
+    groupby([:conf, :division_leader])
+    transform(
+        :pct => (x -> sortperm(x, rev=true)) => :conference_rank,
+    )
+    transform(
+        [:division_leader, :conference_rank] => ByRow((l,r) -> l ? r : r+4) => :conference_rank,
+    )
+    sort(:conference_rank)
+end;
 ```
 
----
+### AFC Standings
+
+```!
+subset(rank_df, :conf => (x -> x .== "AFC"))
+```
+
+### NFC Standings
+
+```!
+subset(rank_df, :conf => (x -> x .== "NFC"))
+```
+
 
 [^1]: Depending on what you expect to get from this tutorial, this may be a good use case for a [temporary environment](https://pkgdocs.julialang.org/v1/environments/#Temporary-environments).
 [^2]: This example requires `using Statistics`.
