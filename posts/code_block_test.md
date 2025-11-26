@@ -360,43 +360,21 @@ We really care about the conference standings.
 We'll use a simplified algorithm of computing division and wild-card tiebreakers.
 
 ```!
-final_df[
-    final_df[!, :division] .== "AFC West",
-    :pct
-]
+rank(x) = sortperm(sortperm(-1 .* x))
 ```
-
-```!
-sortperm(final_df[
-    final_df[!, :division] .== "AFC West",
-    :pct
-]; rev=true)
-```
-
-```!
-@chain final_df begin
-    subset(:division => (x -> x .== "AFC West"))
-
-    transform(
-        :pct => (x -> sortperm(x, rev=true)) => :division_rank,
-    )
-    sort(:division_rank)
-end
-```
-
 
 ```!
 rank_df = @chain final_df begin
     groupby(:division)
     transform(
-        :pct => (x -> sortperm(x, rev=true)) => :division_rank,
+        :pct => rank => :division_rank,
     )
     transform(
         :division_rank => (x -> x .== 1) => :division_leader,
     )
     groupby([:conf, :division_leader])
     transform(
-        :pct => (x -> sortperm(x, rev=true)) => :conference_rank,
+        :pct => rank => :conference_rank,
     )
     transform(
         [:division_leader, :conference_rank] => ByRow((l,r) -> l ? r : r+4) => :conference_rank,
