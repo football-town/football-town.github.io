@@ -1,7 +1,8 @@
 +++
 title = "Conference Standings"
-date = Date(2025, 11, 25)
-rss = "A short description of the page which would serve as **blurb** in a `RSS` feed; you can use basic markdown here but the whole description string must be a single line (not a multiline string). Like this one for instance. Keep in mind that styling is minimal in RSS so for instance don't expect maths or fancy styling to work; images should be ok though: ![](https://upload.wikimedia.org/wikipedia/en/3/32/Rick_and_Morty_opening_credits.jpeg)"
+date = Date(2025, 12, 2)
+rss_date = Date(2025, 12, 2)
+rss = "A brief tutorial to demonstrate how NFLData.jl and DataFrames.jl can be used to compute AFC and NFC standings."
 
 tags = ["tutorials"]
 +++
@@ -9,10 +10,12 @@ tags = ["tutorials"]
 Any regular-season analysis of the NFL would be incomplete without some awareness of the conference standings.
 Standings have [implications](https://www.nfl.com/standings/tie-breaking-procedures) for both the playoffs and the draft, and understanding those implications can help explain counter-intuitive phenomena&mdash;especially near the end of the regular season.
 
-In this tutorial, we're going to reproduce the final [2024 conference standings](https://www.nfl.com/standings/conference/2024/REG).
-The code can easily be adapted to handle other points in time or simulated results.
+In this tutorial, we're going to explore whether we can reproduce the final [2024 conference standings](https://www.nfl.com/standings/conference/2024/REG).
+The main focus will be sourcing from NFLData.jl and performing basic dataframe operations rather than an exact result that reflects the NFL rulebook.
+The code could be adapted to handle other points in time or simulated results.
 
-Some familiarity with Julia and with the NFL is helpful.
+Some familiarity with Julia, DataFrames.jl, and with the NFL is helpful.
+Everything here should be accessible for users familiar with the [nflverse](https://www.nflverse.com/) but new to Julia.
 
 \toc
 
@@ -54,7 +57,7 @@ Julia supports a similar [piping syntax](https://docs.julialang.org/en/v1/manual
 ```julia
 input_df |>
     (x -> groupby(x, [:key1, :key2])) |>
-    (x -> combine(x, :value => mean => :value_mean, ))
+    (x -> combine(x, :value => mean => :value_mean, :value => std => :value_std))
 ```
 
 I find that syntax to be clunky.
@@ -357,24 +360,23 @@ end
 ```
 
 We really care about the conference standings.
-We'll use a simplified algorithm of computing division and wild-card tiebreakers.
 
 ```!
-rank(x) = sortperm(sortperm(-1 .* x))
+rank(x; rev::Bool=false) = sortperm(sortperm(x; rev))
 ```
 
 ```!
 rank_df = @chain final_df begin
     groupby(:division)
     transform(
-        :pct => rank => :division_rank,
+        :pct => (x -> rank(x; rev=true)) => :division_rank,
     )
     transform(
         :division_rank => (x -> x .== 1) => :division_leader,
     )
     groupby([:conf, :division_leader])
     transform(
-        :pct => rank => :conference_rank,
+        :pct => (x -> rank(x; rev=true)) => :conference_rank,
     )
     transform(
         [:division_leader, :conference_rank] => ByRow((l,r) -> l ? r : r+4) => :conference_rank,
@@ -389,13 +391,29 @@ end;
 subset(rank_df, :conf => (x -> x .== "AFC"))
 ```
 
+This correctly assigns the playoff teams, but it requires the tiebreaker to handle the three 4-13 teams.
+
 ### NFC Standings
 
 ```!
 subset(rank_df, :conf => (x -> x .== "NFC"))
 ```
 
+Because we haven't coded the tiebreaker, our NFC standings lead to incorrect NFC West division winner, putting SEA in the playoffs instead of LA.
+
+### Tiebreakers
+
+The [tiebreaking algorithm](https://www.nfl.com/standings/tie-breaking-procedures) requires a number of pair-wise calculations between the tied teams.
+It would be challenging to do an exhaustive calculation of these values and conduct a multi-column sort.[^4]
+
+As it turns out, LA and SEA have the same head-to-head record, division record, common record, and conference record.
+The tie is only broken with strength of victory.
+Implementing this correctly would require quite a bit more code than shown here.
+This may be addressed in a future tutorial.
+
+---
 
 [^1]: Depending on what you expect to get from this tutorial, this may be a good use case for a [temporary environment](https://pkgdocs.julialang.org/v1/environments/#Temporary-environments).
 [^2]: This example requires `using Statistics`.
 [^3]: For a detailed explanation of "wide" and "long" formats, DataFrames.jl has a section about [reshaping data](https://dataframes.juliadata.org/stable/man/reshaping_and_pivoting/).
+[^4]: Up to the coin-toss, the tiebreaking algorithm could probably be structured as an [alternate ordering](https://docs.julialang.org/en/v1/base/sort/#Alternate-Orderings). That is *way* beyond the scope of this tutorial.
