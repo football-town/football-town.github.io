@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{insert style.html}}
+  <title>{{isdef root}}{{fill root}} - {{end}}{{fill fd_tag}}</title>
+</head>
+<body>
+  <div id="layout"> <!-- Closed in foot -->
+    {{insert sidebar.html}}
+    <div id="main"> <!-- Closed in foot -->
+      <div class="header">
+        <h1>{{fill fd_tag}}</h1>
+      </div>
+      <div class="franklin-content">
+        {{taglist}}
+        {{insert page_foot.html}}
+      </div>
+    </div> <!-- end of id=main -->
+  </div> <!-- end of id=layout -->
+</body>
+</html>
