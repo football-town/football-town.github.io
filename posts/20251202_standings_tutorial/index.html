@@ -1,0 +1,439 @@
+<!doctype html> <html lang=en > <meta charset=UTF-8 > <meta name=viewport  content="width=device-width, initial-scale=1"> <link rel=stylesheet  href="/libs/highlight/styles/github.min.css"> <link rel=stylesheet  href="/css/franklin.css"> <link rel=stylesheet  href="/css/pure.css"> <link rel=stylesheet  href="/css/side-menu.css"> <style> .franklin-content{padding-left:10%;} @media (min-width: 940px) { .franklin-content {width: 640px; margin-left: 0px; padding-left: 80px;} .header {width: 700px;} } </style> <link rel=icon  href="/assets/football.png"> <title>Conference Standings</title> <div id=layout > <a href="#menu" id=menuLink  class=menu-link ><span></span></a> <div id=menu > <div class=pure-menu > <a class=pure-menu-heading  href="/">football.town</a> <ul class=pure-menu-list > <li class="pure-menu-item "><a href="/tag/updates/" class=pure-menu-link >updates</a> <li class="pure-menu-item "><a href="/tag/tutorials/" class=pure-menu-link >tutorials</a> </ul> </div> </div> <div id=main > <div class=header > <h1>Conference Standings</h1> <img width=24  height=24  alt=KyleSJohnston  class=post-avatar  src="https://github.com/KyleSJohnston.png?size=24"> <a href="https://github.com/KyleSJohnston">KyleSJohnston</a> </div> <div class=franklin-content > <p>Any regular-season analysis of the NFL would be incomplete without some awareness of the conference standings. Standings have <a href="https://www.nfl.com/standings/tie-breaking-procedures">implications</a> for both the playoffs and the draft, and understanding those implications can help explain counter-intuitive phenomena&mdash;especially near the end of the regular season.</p> <p>In this tutorial, we&#39;re going to explore whether we can reproduce the final <a href="https://www.nfl.com/standings/conference/2024/REG">2024 conference standings</a>. The main focus will be sourcing from NFLData.jl and performing basic dataframe operations rather than an exact result that reflects the NFL rulebook. The code could be adapted to handle other points in time or simulated results.</p> <p>Some familiarity with Julia, DataFrames.jl, and with the NFL is helpful. Everything here should be accessible for users familiar with the <a href="https://www.nflverse.com/">nflverse</a> but new to Julia.</p> <div class=franklin-toc ><ol><li><a href="#preparing_the_environment">Preparing the Environment</a><ol><li><a href="#why_chain">Why <code>Chain</code>?</a></ol><li><a href="#loading_data">Loading Data</a><ol><li><a href="#teams">Teams</a><li><a href="#schedules_results">Schedules &amp; Results</a></ol><li><a href="#cleaning_data">Cleaning Data</a><ol><li><a href="#conference_division_indicators">Conference &amp; Division Indicators</a><li><a href="#home_away_interpretations">Home &amp; Away Interpretations</a></ol><li><a href="#aggregation">Aggregation</a><ol><li><a href="#afc_standings">AFC Standings</a><li><a href="#nfc_standings">NFC Standings</a><li><a href="#tiebreakers">Tiebreakers</a></ol></ol></div> <h2 id=preparing_the_environment ><a href="#preparing_the_environment" class=header-anchor >Preparing the Environment</a></h2> <p>For this tutorial, we need to import a few packages.</p> <pre><code class="julia hljs"><span class=hljs-keyword >using</span> Chain
+<span class=hljs-keyword >using</span> DataFrames
+<span class=hljs-keyword >using</span> NFLData</code></pre> <p>Depending on your environment, you may need to add these packages to the environment first. If this errors, you have two options:</p> <ul> <li><p><code>pkg&gt; add Chain, DataFrames, NFLData</code> or</p> <li><p><code>import Pkg; Pkg.add&#40;&#91;&quot;Chain&quot;, &quot;DataFrames&quot;, &quot;NFLData&quot;&#93;&#41;</code></p> </ul> <p>Either will modify your environment to make these packages available.<sup id="fnref:1"><a href="#fndef:1" class=fnref >[1]</a></sup></p> <h3 id=why_chain ><a href="#why_chain" class=header-anchor >Why <code>Chain</code>?</a></h3> <p>I started using Julia after several years of Python. Python syntax supports building up expressions by chaining methods to the end of previous results.</p> <p>For example:</p> <pre><code class="python hljs">input_df.groupby([
+    <span class=hljs-string >&quot;key1&quot;</span>, <span class=hljs-string >&quot;key2&quot;</span>,
+]).agg(
+    value_mean=pd.NamedAgg(column=<span class=hljs-string >&quot;value&quot;</span>, aggfunc=np.mean),
+    value_std=pd.NamedAgg(column=<span class=hljs-string >&quot;value&quot;</span>, aggfunc=np.std),
+).plot()</code></pre> <p>This syntax arises somewhat naturally when iterating in a Jupyter notebook.</p> <p>Julia supports a similar <a href="https://docs.julialang.org/en/v1/manual/functions/#Function-composition-and-piping">piping syntax</a>.<sup id="fnref:2"><a href="#fndef:2" class=fnref >[2]</a></sup></p> <pre><code class="julia hljs">input_df |&gt;
+    (x -&gt; groupby(x, [:key1, :key2])) |&gt;
+    (x -&gt; combine(x, :value =&gt; mean =&gt; :value_mean, :value =&gt; std =&gt; :value_std))</code></pre> <p>I find that syntax to be clunky. With <code>Chain</code>, the same example reads a lot cleaner.</p> <pre><code class="julia hljs"><span class=hljs-meta >@chain</span> input_df <span class=hljs-keyword >begin</span>
+    groupby([:key1, :key2])
+    combine(
+        :value =&gt; mean =&gt; :value_mean,
+        :value =&gt; std =&gt; :value_std,
+    )
+<span class=hljs-keyword >end</span></code></pre> <p>The <a href="https://github.com/jkrumbiegel/Chain.jl?tab&#61;readme-ov-file#chainjl"><code>Chain</code> documentation</a> has a number of &#40;better&#41; examples.</p> <h2 id=loading_data ><a href="#loading_data" class=header-anchor >Loading Data</a></h2> <p>We source data with <code>NFLData.load_teams&#40;&#41;</code> and <code>NFLData.load_schedules&#40;&#41;</code>.</p> <h3 id=teams ><a href="#teams" class=header-anchor >Teams</a></h3> <pre><code class="julia hljs">first(load_teams(), <span class=hljs-number >3</span>)</code></pre><pre><code class="plaintext hljs">3×16 DataFrame
+ Row │ team_abbr  team_name          team_id  team_nick  team_conf  team_division  team_color  team_color2  team_color3  team_color4  team_logo_wikipedia                team_logo_espn                     team_wordmark                      team_conference_logo               team_league_logo                   team_logo_squared
+     │ String     String             Int64    String     String     String         String      String       String?      String?      String                             String                             String                             String                             String                             String
+─────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ ARI        Arizona Cardinals     3800  Cardinals  NFC        NFC West       #97233F     #000000      #ffb612      #a5acaf      https://upload.wikimedia.org/wik…  https://a.espncdn.com/i/teamlogo…  https://github.com/nflverse/nflv…  https://github.com/nflverse/nflv…  https://raw.githubusercontent.co…  https://github.com/nflverse/nflv…
+   2 │ ATL        Atlanta Falcons        200  Falcons    NFC        NFC South      #A71930     #000000      #a5acaf      #a30d2d      https://upload.wikimedia.org/wik…  https://a.espncdn.com/i/teamlogo…  https://github.com/nflverse/nflv…  https://github.com/nflverse/nflv…  https://raw.githubusercontent.co…  https://github.com/nflverse/nflv…
+   3 │ BAL        Baltimore Ravens       325  Ravens     AFC        AFC North      #241773     #9E7C0C      #9e7c0c      #c60c30      https://upload.wikimedia.org/wik…  https://a.espncdn.com/i/teamlogo…  https://github.com/nflverse/nflv…  https://github.com/nflverse/nflv…  https://raw.githubusercontent.co…  https://github.com/nflverse/nflv…</code></pre> <p>To make joins slightly easier, we source the team data and rename with <code>select</code>.</p> <pre><code class="julia hljs">team_df = <span class=hljs-meta >@chain</span> load_teams() <span class=hljs-keyword >begin</span>
+    select(
+        :team_abbr =&gt; :team,
+        :team_name =&gt; :name,
+        :team_conf =&gt; :conf,
+        :team_division =&gt; :division,
+    )
+<span class=hljs-keyword >end</span>
+
+first(team_df, <span class=hljs-number >10</span>)</code></pre><pre><code class="plaintext hljs">10×4 DataFrame
+ Row │ team    name                conf    division
+     │ String  String              String  String
+─────┼───────────────────────────────────────────────
+   1 │ ARI     Arizona Cardinals   NFC     NFC West
+   2 │ ATL     Atlanta Falcons     NFC     NFC South
+   3 │ BAL     Baltimore Ravens    AFC     AFC North
+   4 │ BUF     Buffalo Bills       AFC     AFC East
+   5 │ CAR     Carolina Panthers   NFC     NFC South
+   6 │ CHI     Chicago Bears       NFC     NFC North
+   7 │ CIN     Cincinnati Bengals  AFC     AFC North
+   8 │ CLE     Cleveland Browns    AFC     AFC North
+   9 │ DAL     Dallas Cowboys      NFC     NFC East
+  10 │ DEN     Denver Broncos      AFC     AFC West</code></pre> <h3 id=schedules_results ><a href="#schedules_results" class=header-anchor >Schedules &amp; Results</a></h3> <pre><code class="julia hljs">games_df = <span class=hljs-meta >@chain</span> load_schedules() <span class=hljs-keyword >begin</span>
+    subset(
+        :season =&gt; x -&gt; x .== <span class=hljs-number >2024</span>,
+        :game_type =&gt; x -&gt; x .== <span class=hljs-string >&quot;REG&quot;</span>,
+    )
+<span class=hljs-keyword >end</span>;
+
+first(games_df, <span class=hljs-number >5</span>)</code></pre><pre><code class="plaintext hljs">5×46 DataFrame
+ Row │ game_id          season  game_type  week   gameday     weekday   gametime  away_team  away_score  home_team  home_score  location  result  total   overtime  old_game_id  gsis    nfl_detail_id  pfr           pff      espn       ftn     away_rest  home_rest  away_moneyline  home_moneyline  spread_line  away_spread_odds  home_spread_odds  total_line  under_odds  over_odds  div_game  roof      surface    temp     wind     away_qb_id  home_qb_id  away_qb_name   home_qb_name     away_coach       home_coach      referee        stadium_id  stadium
+     │ String           Int64   String     Int64  Date        String    Time?     String     Int64?      String     Int64?      String    Int64?  Int64?  Int64?    Int64        Int64?  String?        String        Int64?   Int64      Int64?  Int64      Int64      Int64?          Int64?          Float64?     Int64?            Int64?            Float64?    Int64?      Int64?     Int64     String    String     Int64?   Int64?   String?     String?     String?        String?          String           String          String?        String      String
+─────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ 2024_01_BAL_KC     2024  REG            1  2024-09-05  Thursday  20:20:00  BAL                20  KC                 27  Home           7      47         0   2024090500   59508  missing        202409050kan  missing  401671789    6449          7          7             124            -148          3.0              -118              -102        46.0        -110       -110         0  outdoors  grass           67        8  00-0034796  00-0033873  Lamar Jackson  Patrick Mahomes  John Harbaugh    Andy Reid       Shawn Hochuli  KAN00       GEHA Field at Arrowhead Stadium
+   2 │ 2024_01_GB_PHI     2024  REG            1  2024-09-06  Friday    20:15:00  GB                 29  PHI                34  Neutral        5      63         0   2024090600   59509  missing        202409060phi  missing  401671805    6450          7          7             110            -130          2.0              -110              -110        49.5        -112       -108         0  outdoors             missing  missing  00-0036264  00-0036389  Jordan Love    Jalen Hurts      Matt LaFleur     Nick Sirianni   Ron Torbert    SAO00       Arena Corinthians
+   3 │ 2024_01_PIT_ATL    2024  REG            1  2024-09-08  Sunday    13:00:00  PIT                18  ATL                10  Home          -8      28         0   2024090800   59510  missing        202409080atl  missing  401671744    6451          7          7             160            -192          4.0              -110              -110        43.0        -115       -105         0  closed    fieldturf  missing  missing  00-0036945  00-0029604  Justin Fields  Kirk Cousins     Mike Tomlin      Raheem Morris   Brad Rogers    ATL97       Mercedes-Benz Stadium
+   4 │ 2024_01_ARI_BUF    2024  REG            1  2024-09-08  Sunday    13:00:00  ARI                28  BUF                34  Home           6      62         0   2024090801   59511  missing        202409080buf  missing  401671617    6452          7          7             250            -310          6.5              -105              -115        46.0        -112       -108         0  outdoors  a_turf          61       20  00-0035228  00-0034857  Kyler Murray   Josh Allen       Jonathan Gannon  Sean McDermott  Tra Blake      BUF00       New Era Field
+   5 │ 2024_01_TEN_CHI    2024  REG            1  2024-09-08  Sunday    13:00:00  TEN                17  CHI                24  Home           7      41         0   2024090802   59512  missing        202409080chi  missing  401671719    6453          7          7             164            -198          4.0              -108              -112        43.0        -110       -110         0  outdoors  grass           67        8  00-0039152  00-0039918  Will Levis     Caleb Williams   Brian Callahan   Matt Eberflus   Shawn Smith    CHI98       Soldier Field</code></pre> <pre><code class="julia hljs">nrow(games_df)</code></pre><pre><code class="plaintext hljs">272</code></pre>
+<pre><code class="julia hljs">extrema(games_df[!, :week])</code></pre><pre><code class="plaintext hljs">(1, 18)</code></pre>
+<p>272 games are included over 18 weeks of football.</p>
+<pre><code class="julia hljs">ismissing.(games_df[!, :result]) |&gt; sum</code></pre><pre><code class="plaintext hljs">0</code></pre>
+<p>Results are available for every game.</p>
+<h2 id=cleaning_data ><a href="#cleaning_data" class=header-anchor >Cleaning Data</a></h2>
+<p>For conference standing purposes, I would consider <code>games_df</code> to be a &quot;wide&quot; format.<sup id="fnref:3"><a href="#fndef:3" class=fnref >[3]</a></sup> We have one row per <em>game</em>; we want one row per <em>team</em>. We can obtain a &quot;long&quot; format by concatenating a &quot;home&quot; dataframe and an &quot;away&quot; dataframe.</p>
+<h3 id=conference_division_indicators ><a href="#conference_division_indicators" class=header-anchor >Conference &amp; Division Indicators</a></h3>
+<p>To compute conference &#40;division&#41; records, we need to know whether both teams are in the same conference &#40;division&#41;. We join with <code>team_df</code> to add the conference and division fields, and compute the indicators with <code>transform</code>.</p>
+<pre><code class="julia hljs">games_df = <span class=hljs-meta >@chain</span> games_df <span class=hljs-keyword >begin</span>
+    leftjoin(
+        team_df,
+        on = :away_team =&gt; :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_away&quot;</span>,
+    )
+    leftjoin(
+        team_df,
+        on = :home_team =&gt; :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_home&quot;</span>,
+    )
+    transform(
+        [:conf_home, :conf_away] =&gt; ((h,a) -&gt; h .== a) =&gt; :is_conf,
+        [:division_home, :division_away] =&gt; ((h,a) -&gt; h .== a) =&gt; :is_division,
+    )
+<span class=hljs-keyword >end</span>;</code></pre>
+<h3 id=home_away_interpretations ><a href="#home_away_interpretations" class=header-anchor >Home &amp; Away Interpretations</a></h3>
+<p>We have to do two things to interpret the data correctly:</p>
+<ul>
+<li><p><code>home_score</code> and <code>away_score</code> need to be converted into <code>points_for</code> and <code>points_against</code>.</p>
+
+<li><p><code>result</code>&mdash;which is <code>home_score - away_score</code>&mdash;requires some logic to become W/L/T indicators.</p>
+
+</ul>
+<p>Most of the other fields are simply passed through the <code>select</code>.</p>
+<pre><code class="julia hljs">away_df = <span class=hljs-meta >@chain</span> games_df <span class=hljs-keyword >begin</span>
+    select(
+        :away_team =&gt; :team,
+        :away_team =&gt; (x -&gt; <span class=hljs-literal >false</span>) =&gt; :is_home,
+        :away_score =&gt; :points_for,
+        :home_score =&gt; :points_against,
+        :result =&gt; (x -&gt; x .&lt; <span class=hljs-number >0</span>) =&gt; :is_win,
+        :result =&gt; (x -&gt; x .&gt; <span class=hljs-number >0</span>) =&gt; :is_loss,
+        :result =&gt; (x -&gt; x .== <span class=hljs-number >0</span>) =&gt; :is_tie,
+        :is_conf,
+        :is_division,
+    )
+<span class=hljs-keyword >end</span>;
+
+home_df = <span class=hljs-meta >@chain</span> games_df <span class=hljs-keyword >begin</span>
+    select(
+        :home_team =&gt; :team,
+        :home_team =&gt; (x -&gt; <span class=hljs-literal >true</span>) =&gt; :is_home,
+        :home_score =&gt; :points_for,
+        :away_score =&gt; :points_against,
+        :result =&gt; (x -&gt; x .&gt; <span class=hljs-number >0</span>) =&gt; :is_win,
+        :result =&gt; (x -&gt; x .&lt; <span class=hljs-number >0</span>) =&gt; :is_loss,
+        :result =&gt; (x -&gt; x .== <span class=hljs-number >0</span>) =&gt; :is_tie,
+        :is_conf,
+        :is_division,
+    )
+<span class=hljs-keyword >end</span>;
+
+df = vcat(home_df, away_df)
+
+first(df, <span class=hljs-number >5</span>)</code></pre><pre><code class="plaintext hljs">5×9 DataFrame
+ Row │ team    is_home  points_for  points_against  is_win  is_loss  is_tie  is_conf  is_division
+     │ String  Bool     Int64?      Int64?          Bool    Bool     Bool    Bool     Bool
+─────┼────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ KC         true          27              20    true    false   false     true        false
+   2 │ PHI        true          34              29    true    false   false     true        false
+   3 │ ATL        true          10              18   false     true   false    false        false
+   4 │ BUF        true          34              28    true    false   false    false        false
+   5 │ CHI        true          24              17    true    false   false    false        false</code></pre>
+<p>Just to make sure we&#39;ve done this correctly, we verify some totals.</p>
+<pre><code class="julia hljs">sum(df[!, :is_division]) == <span class=hljs-number >192</span>  <span class=hljs-comment ># 4 teams * 3 opponents * 2 meetings * 8 divisions</span></code></pre><pre><code class="plaintext hljs">true</code></pre>
+<pre><code class="julia hljs">sum(df[!, :points_for]) == sum(df[!, :points_against])</code></pre><pre><code class="plaintext hljs">true</code></pre>
+<pre><code class="julia hljs">sum(df[!, :is_win]) == sum(df[!, :is_loss])</code></pre><pre><code class="plaintext hljs">true</code></pre>
+<pre><code class="julia hljs">sum(df[!, :is_tie]) % <span class=hljs-number >2</span> == <span class=hljs-number >0</span></code></pre><pre><code class="plaintext hljs">true</code></pre>
+<h2 id=aggregation ><a href="#aggregation" class=header-anchor >Aggregation</a></h2>
+<p>We know from the <a href="https://www.nfl.com/standings/tie-breaking-procedures">tiebreaking procedures</a> that ties count as a half-win for each team. Since we will be repeating this calculation a number of times, it is a good candidate for a function.</p>
+<pre><code class="julia hljs"><span class=hljs-keyword >function</span> winning_percentage(wins, losses, ties)
+    total_wins = wins + <span class=hljs-number >0.5</span> * ties
+    total_games = wins + losses + ties
+    <span class=hljs-keyword >return</span> total_wins / total_games
+<span class=hljs-keyword >end</span></code></pre><pre><code class="plaintext hljs">winning_percentage (generic function with 1 method)</code></pre>
+<p>For a dense representation of the record, we can combine it into a string.</p>
+<pre><code class="julia hljs">recordstr(wins, losses, ties) = <span class=hljs-string >&quot;<span class=hljs-variable >$wins</span> - <span class=hljs-variable >$losses</span> - <span class=hljs-variable >$ties</span>&quot;</span></code></pre><pre><code class="plaintext hljs">recordstr (generic function with 1 method)</code></pre>
+<p>We start by computing team totals.</p>
+<pre><code class="julia hljs">total_df = <span class=hljs-meta >@chain</span> df <span class=hljs-keyword >begin</span>
+    groupby(:team)
+    combine(
+        :is_win =&gt; sum =&gt; :wins,
+        :is_loss =&gt; sum =&gt; :losses,
+        :is_tie =&gt; sum =&gt; :ties,
+        :points_for =&gt; sum =&gt; :points_for,
+        :points_against =&gt; sum =&gt; :points_against,
+    )
+    transform(
+        [:wins, :losses, :ties] =&gt; ((w,l,t) -&gt; winning_percentage.(w,l,t)) =&gt; :pct,
+        [:points_for, :points_against] =&gt; ((pf,pa) -&gt; pf .- pa) =&gt; :net_pts,
+    )
+<span class=hljs-keyword >end</span>
+
+first(sort(total_df, :pct, rev=<span class=hljs-literal >true</span>), <span class=hljs-number >5</span>)</code></pre><pre><code class="plaintext hljs">5×8 DataFrame
+ Row │ team    wins   losses  ties   points_for  points_against  pct       net_pts
+     │ String  Int64  Int64   Int64  Int64       Int64           Float64   Int64
+─────┼─────────────────────────────────────────────────────────────────────────────
+   1 │ KC         15       2      0         385             326  0.882353       59
+   2 │ DET        15       2      0         564             342  0.882353      222
+   3 │ PHI        14       3      0         463             303  0.823529      160
+   4 │ MIN        14       3      0         432             332  0.823529      100
+   5 │ BUF        13       4      0         525             368  0.764706      157</code></pre>
+<p>Then we compute the home, away, conference, and division records.</p>
+<pre><code class="julia hljs">location_df = <span class=hljs-meta >@chain</span> df <span class=hljs-keyword >begin</span>
+    groupby([:team, :is_home])
+    combine(
+        :is_win =&gt; sum =&gt; :wins,
+        :is_loss =&gt; sum =&gt; :losses,
+        :is_tie =&gt; sum =&gt; :ties,
+    )
+    transform(
+        [:wins, :losses, :ties] =&gt; ((w,l,t) -&gt; recordstr.(w,l,t)) =&gt; :record,
+    )
+<span class=hljs-keyword >end</span>;
+
+division_df = <span class=hljs-meta >@chain</span> df <span class=hljs-keyword >begin</span>
+    groupby([:team, :is_division])
+    combine(
+        :is_win =&gt; sum =&gt; :wins,
+        :is_loss =&gt; sum =&gt; :losses,
+        :is_tie =&gt; sum =&gt; :ties,
+    )
+    transform(
+        [:wins, :losses, :ties] =&gt; ((w,l,t) -&gt; recordstr.(w, l ,t)) =&gt; :record,
+        [:wins, :losses, :ties] =&gt; ((w,l,t) -&gt; winning_percentage.(w, l ,t)) =&gt; :pct,
+    )
+<span class=hljs-keyword >end</span>;
+
+conf_df = <span class=hljs-meta >@chain</span> df <span class=hljs-keyword >begin</span>
+    groupby([:team, :is_conf])
+    combine(
+        :is_win =&gt; sum =&gt; :wins,
+        :is_loss =&gt; sum =&gt; :losses,
+        :is_tie =&gt; sum =&gt; :ties,
+    )
+    transform(
+        [:wins, :losses, :ties] =&gt; ((w,l,t) -&gt; recordstr.(w, l ,t)) =&gt; :record,
+        [:wins, :losses, :ties] =&gt; ((w,l,t) -&gt; winning_percentage.(w, l ,t)) =&gt; :pct,
+    )
+<span class=hljs-keyword >end</span>;</code></pre>
+<p>Finally, we combine them into a single dataframe.</p>
+<pre><code class="julia hljs">final_df = <span class=hljs-meta >@chain</span> total_df <span class=hljs-keyword >begin</span>
+    leftjoin(
+        team_df,
+        on = :team,
+    )
+    leftjoin(
+        subset(location_df, :is_home),
+        on = :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_home&quot;</span>,
+    )
+    leftjoin(
+        subset(location_df, :is_home =&gt; ByRow(!)),
+        on = :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_away&quot;</span>,
+    )
+    leftjoin(
+        subset(division_df, :is_division),
+        on = :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_division&quot;</span>,
+    )
+    leftjoin(
+        subset(conf_df, :is_conf),
+        on = :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_conf&quot;</span>,
+    )
+    leftjoin(
+        subset(conf_df, :is_conf =&gt; ByRow(!)),
+        on = :team,
+        renamecols = <span class=hljs-string >&quot;&quot;</span> =&gt; <span class=hljs-string >&quot;_non_conf&quot;</span>,
+    )
+<span class=hljs-keyword >end</span>
+
+names(final_df)</code></pre><pre><code class="plaintext hljs">39-element Vector{String}:
+ &quot;team&quot;
+ &quot;wins&quot;
+ &quot;losses&quot;
+ &quot;ties&quot;
+ &quot;points_for&quot;
+ &quot;points_against&quot;
+ &quot;pct&quot;
+ &quot;net_pts&quot;
+ &quot;name&quot;
+ &quot;conf&quot;
+ &quot;division&quot;
+ &quot;is_home_home&quot;
+ &quot;wins_home&quot;
+ &quot;losses_home&quot;
+ &quot;ties_home&quot;
+ &quot;record_home&quot;
+ &quot;is_home_away&quot;
+ &quot;wins_away&quot;
+ &quot;losses_away&quot;
+ &quot;ties_away&quot;
+ &quot;record_away&quot;
+ &quot;is_division_division&quot;
+ &quot;wins_division&quot;
+ &quot;losses_division&quot;
+ &quot;ties_division&quot;
+ &quot;record_division&quot;
+ &quot;pct_division&quot;
+ &quot;is_conf_conf&quot;
+ &quot;wins_conf&quot;
+ &quot;losses_conf&quot;
+ &quot;ties_conf&quot;
+ &quot;record_conf&quot;
+ &quot;pct_conf&quot;
+ &quot;is_conf_non_conf&quot;
+ &quot;wins_non_conf&quot;
+ &quot;losses_non_conf&quot;
+ &quot;ties_non_conf&quot;
+ &quot;record_non_conf&quot;
+ &quot;pct_non_conf&quot;</code></pre>
+<p>Using this dataframe, let&#39;s show the league standings and see <a href="https://www.nfl.com/standings/league/2024/REG">how they compare</a>.</p>
+<pre><code class="julia hljs"><span class=hljs-meta >@chain</span> final_df <span class=hljs-keyword >begin</span>
+    select(
+        :team,
+        :name,
+        :wins,
+        :losses,
+        :ties,
+        :pct,
+        :points_for,
+        :points_against,
+        :net_pts,
+    )
+    sort([
+        order(:pct, rev=<span class=hljs-literal >true</span>),
+        order(:name),
+    ])
+<span class=hljs-keyword >end</span></code></pre><pre><code class="plaintext hljs">32×9 DataFrame
+ Row │ team    name                   wins   losses  ties   pct       points_for  points_against  net_pts
+     │ String  String?                Int64  Int64   Int64  Float64   Int64       Int64           Int64
+─────┼────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ DET     Detroit Lions             15       2      0  0.882353         564             342      222
+   2 │ KC      Kansas City Chiefs        15       2      0  0.882353         385             326       59
+   3 │ MIN     Minnesota Vikings         14       3      0  0.823529         432             332      100
+   4 │ PHI     Philadelphia Eagles       14       3      0  0.823529         463             303      160
+   5 │ BUF     Buffalo Bills             13       4      0  0.764706         525             368      157
+   6 │ BAL     Baltimore Ravens          12       5      0  0.705882         518             361      157
+   7 │ WAS     Washington Commanders     12       5      0  0.705882         485             391       94
+   8 │ GB      Green Bay Packers         11       6      0  0.647059         460             338      122
+   9 │ LAC     Los Angeles Chargers      11       6      0  0.647059         402             301      101
+  10 │ DEN     Denver Broncos            10       7      0  0.588235         425             311      114
+  11 │ HOU     Houston Texans            10       7      0  0.588235         372             372        0
+  12 │ LA      Los Angeles Rams          10       7      0  0.588235         367             386      -19
+  13 │ PIT     Pittsburgh Steelers       10       7      0  0.588235         380             347       33
+  14 │ SEA     Seattle Seahawks          10       7      0  0.588235         375             368        7
+  15 │ TB      Tampa Bay Buccaneers      10       7      0  0.588235         502             385      117
+  16 │ CIN     Cincinnati Bengals         9       8      0  0.529412         472             434       38
+  17 │ ARI     Arizona Cardinals          8       9      0  0.470588         400             379       21
+  18 │ ATL     Atlanta Falcons            8       9      0  0.470588         389             423      -34
+  19 │ IND     Indianapolis Colts         8       9      0  0.470588         377             427      -50
+  20 │ MIA     Miami Dolphins             8       9      0  0.470588         345             364      -19
+  21 │ DAL     Dallas Cowboys             7      10      0  0.411765         350             468     -118
+  22 │ SF      San Francisco 49ers        6      11      0  0.352941         389             436      -47
+  23 │ CAR     Carolina Panthers          5      12      0  0.294118         341             534     -193
+  24 │ CHI     Chicago Bears              5      12      0  0.294118         310             370      -60
+  25 │ NO      New Orleans Saints         5      12      0  0.294118         338             398      -60
+  26 │ NYJ     New York Jets              5      12      0  0.294118         338             404      -66
+  27 │ JAX     Jacksonville Jaguars       4      13      0  0.235294         320             435     -115
+  28 │ LV      Las Vegas Raiders          4      13      0  0.235294         309             434     -125
+  29 │ NE      New England Patriots       4      13      0  0.235294         289             417     -128
+  30 │ CLE     Cleveland Browns           3      14      0  0.176471         258             435     -177
+  31 │ NYG     New York Giants            3      14      0  0.176471         273             415     -142
+  32 │ TEN     Tennessee Titans           3      14      0  0.176471         311             460     -149</code></pre>
+<p>We really care about the conference standings.</p>
+<pre><code class="julia hljs">rank(x; rev::<span class=hljs-built_in >Bool</span>=<span class=hljs-literal >false</span>) = sortperm(sortperm(x; rev))</code></pre><pre><code class="plaintext hljs">rank (generic function with 1 method)</code></pre>
+<pre><code class="julia hljs">rank_df = <span class=hljs-meta >@chain</span> final_df <span class=hljs-keyword >begin</span>
+    groupby(:division)
+    transform(
+        :pct =&gt; (x -&gt; rank(x; rev=<span class=hljs-literal >true</span>)) =&gt; :division_rank,
+    )
+    transform(
+        :division_rank =&gt; (x -&gt; x .== <span class=hljs-number >1</span>) =&gt; :division_leader,
+    )
+    groupby([:conf, :division_leader])
+    transform(
+        :pct =&gt; (x -&gt; rank(x; rev=<span class=hljs-literal >true</span>)) =&gt; :conference_rank,
+    )
+    transform(
+        [:division_leader, :conference_rank] =&gt; ByRow((l,r) -&gt; l ? r : r+<span class=hljs-number >4</span>) =&gt; :conference_rank,
+    )
+    sort(:conference_rank)
+<span class=hljs-keyword >end</span>;</code></pre>
+<h3 id=afc_standings ><a href="#afc_standings" class=header-anchor >AFC Standings</a></h3>
+<pre><code class="julia hljs">subset(rank_df, :conf =&gt; (x -&gt; x .== <span class=hljs-string >&quot;AFC&quot;</span>))</code></pre><pre><code class="plaintext hljs">16×42 DataFrame
+ Row │ team    wins   losses  ties   points_for  points_against  pct       net_pts  name                  conf     division   is_home_home  wins_home  losses_home  ties_home  record_home  is_home_away  wins_away  losses_away  ties_away  record_away  is_division_division  wins_division  losses_division  ties_division  record_division  pct_division  is_conf_conf  wins_conf  losses_conf  ties_conf  record_conf  pct_conf  is_conf_non_conf  wins_non_conf  losses_non_conf  ties_non_conf  record_non_conf  pct_non_conf  division_rank  division_leader  conference_rank
+     │ String  Int64  Int64   Int64  Int64       Int64           Float64   Int64    String?               String?  String?    Bool?         Int64?     Int64?       Int64?     String?      Bool?         Int64?     Int64?       Int64?     String?      Bool?                 Int64?         Int64?           Int64?         String?          Float64?      Bool?         Int64?     Int64?       Int64?     String?      Float64?  Bool?             Int64?         Int64?           Int64?         String?          Float64?      Int64          Bool             Int64
+─────┼────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ KC         15       2      0         385             326  0.882353       59  Kansas City Chiefs    AFC      AFC West           true          8            0          0  8 - 0 - 0           false          7            2          0  7 - 2 - 0                    true              5                1              0  5 - 1 - 0            0.833333          true         10            2          0  10 - 2 - 0   0.833333             false              5                0              0  5 - 0 - 0                 1.0              1             true                1
+   2 │ BUF        13       4      0         525             368  0.764706      157  Buffalo Bills         AFC      AFC East           true          8            0          0  8 - 0 - 0           false          5            4          0  5 - 4 - 0                    true              5                1              0  5 - 1 - 0            0.833333          true          9            3          0  9 - 3 - 0    0.75                 false              4                1              0  4 - 1 - 0                 0.8              1             true                2
+   3 │ BAL        12       5      0         518             361  0.705882      157  Baltimore Ravens      AFC      AFC North          true          6            2          0  6 - 2 - 0           false          6            3          0  6 - 3 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          8            4          0  8 - 4 - 0    0.666667             false              4                1              0  4 - 1 - 0                 0.8              1             true                3
+   4 │ HOU        10       7      0         372             372  0.588235        0  Houston Texans        AFC      AFC South          true          5            3          0  5 - 3 - 0           false          5            4          0  5 - 4 - 0                    true              5                1              0  5 - 1 - 0            0.833333          true          8            4          0  8 - 4 - 0    0.666667             false              2                3              0  2 - 3 - 0                 0.4              1             true                4
+   5 │ LAC        11       6      0         402             301  0.647059      101  Los Angeles Chargers  AFC      AFC West           true          5            3          0  5 - 3 - 0           false          6            3          0  6 - 3 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          8            4          0  8 - 4 - 0    0.666667             false              3                2              0  3 - 2 - 0                 0.6              2            false                5
+   6 │ PIT        10       7      0         380             347  0.588235       33  Pittsburgh Steelers   AFC      AFC North          true          5            3          0  5 - 3 - 0           false          5            4          0  5 - 4 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          7            5          0  7 - 5 - 0    0.583333             false              3                2              0  3 - 2 - 0                 0.6              2            false                6
+   7 │ DEN        10       7      0         425             311  0.588235      114  Denver Broncos        AFC      AFC West           true          6            2          0  6 - 2 - 0           false          4            5          0  4 - 5 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          6            6          0  6 - 6 - 0    0.5                  false              4                1              0  4 - 1 - 0                 0.8              3            false                7
+   8 │ CIN         9       8      0         472             434  0.529412       38  Cincinnati Bengals    AFC      AFC North          true          3            5          0  3 - 5 - 0           false          6            3          0  6 - 3 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          6            6          0  6 - 6 - 0    0.5                  false              3                2              0  3 - 2 - 0                 0.6              3            false                8
+   9 │ IND         8       9      0         377             427  0.470588      -50  Indianapolis Colts    AFC      AFC South          true          5            3          0  5 - 3 - 0           false          3            6          0  3 - 6 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          7            5          0  7 - 5 - 0    0.583333             false              1                4              0  1 - 4 - 0                 0.2              2            false                9
+  10 │ MIA         8       9      0         345             364  0.470588      -19  Miami Dolphins        AFC      AFC East           true          5            3          0  5 - 3 - 0           false          3            6          0  3 - 6 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          6            6          0  6 - 6 - 0    0.5                  false              2                3              0  2 - 3 - 0                 0.4              2            false               10
+  11 │ NYJ         5      12      0         338             404  0.294118      -66  New York Jets         AFC      AFC East           true          3            5          0  3 - 5 - 0           false          2            7          0  2 - 7 - 0                    true              2                4              0  2 - 4 - 0            0.333333          true          5            7          0  5 - 7 - 0    0.416667             false              0                5              0  0 - 5 - 0                 0.0              3            false               11
+  12 │ NE          4      13      0         289             417  0.235294     -128  New England Patriots  AFC      AFC East           true          2            6          0  2 - 6 - 0           false          2            7          0  2 - 7 - 0                    true              2                4              0  2 - 4 - 0            0.333333          true          3            9          0  3 - 9 - 0    0.25                 false              1                4              0  1 - 4 - 0                 0.2              4            false               12
+  13 │ LV          4      13      0         309             434  0.235294     -125  Las Vegas Raiders     AFC      AFC West           true          2            6          0  2 - 6 - 0           false          2            7          0  2 - 7 - 0                    true              0                6              0  0 - 6 - 0            0.0               true          3            9          0  3 - 9 - 0    0.25                 false              1                4              0  1 - 4 - 0                 0.2              4            false               13
+  14 │ JAX         4      13      0         320             435  0.235294     -115  Jacksonville Jaguars  AFC      AFC South          true          3            5          0  3 - 5 - 0           false          1            8          0  1 - 8 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          4            8          0  4 - 8 - 0    0.333333             false              0                5              0  0 - 5 - 0                 0.0              3            false               14
+  15 │ CLE         3      14      0         258             435  0.176471     -177  Cleveland Browns      AFC      AFC North          true          2            6          0  2 - 6 - 0           false          1            8          0  1 - 8 - 0                    true              2                4              0  2 - 4 - 0            0.333333          true          3            9          0  3 - 9 - 0    0.25                 false              0                5              0  0 - 5 - 0                 0.0              4            false               15
+  16 │ TEN         3      14      0         311             460  0.176471     -149  Tennessee Titans      AFC      AFC South          true          1            7          0  1 - 7 - 0           false          2            7          0  2 - 7 - 0                    true              1                5              0  1 - 5 - 0            0.166667          true          3            9          0  3 - 9 - 0    0.25                 false              0                5              0  0 - 5 - 0                 0.0              4            false               16</code></pre>
+<p>This correctly assigns the playoff teams, but it requires the tiebreaker to handle the three 4-13 teams.</p>
+<h3 id=nfc_standings ><a href="#nfc_standings" class=header-anchor >NFC Standings</a></h3>
+<pre><code class="julia hljs">subset(rank_df, :conf =&gt; (x -&gt; x .== <span class=hljs-string >&quot;NFC&quot;</span>))</code></pre><pre><code class="plaintext hljs">16×42 DataFrame
+ Row │ team    wins   losses  ties   points_for  points_against  pct       net_pts  name                   conf     division   is_home_home  wins_home  losses_home  ties_home  record_home  is_home_away  wins_away  losses_away  ties_away  record_away  is_division_division  wins_division  losses_division  ties_division  record_division  pct_division  is_conf_conf  wins_conf  losses_conf  ties_conf  record_conf  pct_conf   is_conf_non_conf  wins_non_conf  losses_non_conf  ties_non_conf  record_non_conf  pct_non_conf  division_rank  division_leader  conference_rank
+     │ String  Int64  Int64   Int64  Int64       Int64           Float64   Int64    String?                String?  String?    Bool?         Int64?     Int64?       Int64?     String?      Bool?         Int64?     Int64?       Int64?     String?      Bool?                 Int64?         Int64?           Int64?         String?          Float64?      Bool?         Int64?     Int64?       Int64?     String?      Float64?   Bool?             Int64?         Int64?           Int64?         String?          Float64?      Int64          Bool             Int64
+─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ DET        15       2      0         564             342  0.882353      222  Detroit Lions          NFC      NFC North          true          7            2          0  7 - 2 - 0           false          8            0          0  8 - 0 - 0                    true              6                0              0  6 - 0 - 0            1.0               true         11            1          0  11 - 1 - 0   0.916667              false              4                1              0  4 - 1 - 0                 0.8              1             true                1
+   2 │ PHI        14       3      0         463             303  0.823529      160  Philadelphia Eagles    NFC      NFC East           true          8            1          0  8 - 1 - 0           false          6            2          0  6 - 2 - 0                    true              5                1              0  5 - 1 - 0            0.833333          true          9            3          0  9 - 3 - 0    0.75                  false              5                0              0  5 - 0 - 0                 1.0              1             true                2
+   3 │ SEA        10       7      0         375             368  0.588235        7  Seattle Seahawks       NFC      NFC West           true          3            6          0  3 - 6 - 0           false          7            1          0  7 - 1 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          6            6          0  6 - 6 - 0    0.5                   false              4                1              0  4 - 1 - 0                 0.8              1             true                3
+   4 │ TB         10       7      0         502             385  0.588235      117  Tampa Bay Buccaneers   NFC      NFC South          true          5            4          0  5 - 4 - 0           false          5            3          0  5 - 3 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          8            4          0  8 - 4 - 0    0.666667              false              2                3              0  2 - 3 - 0                 0.4              1             true                4
+   5 │ MIN        14       3      0         432             332  0.823529      100  Minnesota Vikings      NFC      NFC North          true          8            1          0  8 - 1 - 0           false          6            2          0  6 - 2 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          9            3          0  9 - 3 - 0    0.75                  false              5                0              0  5 - 0 - 0                 1.0              2            false                5
+   6 │ WAS        12       5      0         485             391  0.705882       94  Washington Commanders  NFC      NFC East           true          7            2          0  7 - 2 - 0           false          5            3          0  5 - 3 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          9            3          0  9 - 3 - 0    0.75                  false              3                2              0  3 - 2 - 0                 0.6              2            false                6
+   7 │ GB         11       6      0         460             338  0.647059      122  Green Bay Packers      NFC      NFC North          true          6            3          0  6 - 3 - 0           false          5            3          0  5 - 3 - 0                    true              1                5              0  1 - 5 - 0            0.166667          true          6            6          0  6 - 6 - 0    0.5                   false              5                0              0  5 - 0 - 0                 1.0              3            false                7
+   8 │ LA         10       7      0         367             386  0.588235      -19  Los Angeles Rams       NFC      NFC West           true          5            4          0  5 - 4 - 0           false          5            3          0  5 - 3 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          6            6          0  6 - 6 - 0    0.5                   false              4                1              0  4 - 1 - 0                 0.8              2            false                8
+   9 │ ATL         8       9      0         389             423  0.470588      -34  Atlanta Falcons        NFC      NFC South          true          4            5          0  4 - 5 - 0           false          4            4          0  4 - 4 - 0                    true              4                2              0  4 - 2 - 0            0.666667          true          7            5          0  7 - 5 - 0    0.583333              false              1                4              0  1 - 4 - 0                 0.2              2            false                9
+  10 │ ARI         8       9      0         400             379  0.470588       21  Arizona Cardinals      NFC      NFC West           true          6            3          0  6 - 3 - 0           false          2            6          0  2 - 6 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          4            8          0  4 - 8 - 0    0.333333              false              4                1              0  4 - 1 - 0                 0.8              3            false               10
+  11 │ DAL         7      10      0         350             468  0.411765     -118  Dallas Cowboys         NFC      NFC East           true          2            7          0  2 - 7 - 0           false          5            3          0  5 - 3 - 0                    true              3                3              0  3 - 3 - 0            0.5               true          5            7          0  5 - 7 - 0    0.416667              false              2                3              0  2 - 3 - 0                 0.4              3            false               11
+  12 │ SF          6      11      0         389             436  0.352941      -47  San Francisco 49ers    NFC      NFC West           true          4            5          0  4 - 5 - 0           false          2            6          0  2 - 6 - 0                    true              1                5              0  1 - 5 - 0            0.166667          true          4            8          0  4 - 8 - 0    0.333333              false              2                3              0  2 - 3 - 0                 0.4              4            false               12
+  13 │ CHI         5      12      0         310             370  0.294118      -60  Chicago Bears          NFC      NFC North          true          4            5          0  4 - 5 - 0           false          1            7          0  1 - 7 - 0                    true              1                5              0  1 - 5 - 0            0.166667          true          3            9          0  3 - 9 - 0    0.25                  false              2                3              0  2 - 3 - 0                 0.4              4            false               13
+  14 │ CAR         5      12      0         341             534  0.294118     -193  Carolina Panthers      NFC      NFC South          true          3            6          0  3 - 6 - 0           false          2            6          0  2 - 6 - 0                    true              2                4              0  2 - 4 - 0            0.333333          true          4            8          0  4 - 8 - 0    0.333333              false              1                4              0  1 - 4 - 0                 0.2              3            false               14
+  15 │ NO          5      12      0         338             398  0.294118      -60  New Orleans Saints     NFC      NFC South          true          3            6          0  3 - 6 - 0           false          2            6          0  2 - 6 - 0                    true              2                4              0  2 - 4 - 0            0.333333          true          4            8          0  4 - 8 - 0    0.333333              false              1                4              0  1 - 4 - 0                 0.2              4            false               15
+  16 │ NYG         3      14      0         273             415  0.176471     -142  New York Giants        NFC      NFC East           true          1            8          0  1 - 8 - 0           false          2            6          0  2 - 6 - 0                    true              0                6              0  0 - 6 - 0            0.0               true          1           11          0  1 - 11 - 0   0.0833333             false              2                3              0  2 - 3 - 0                 0.4              4            false               16</code></pre>
+<p>Because we haven&#39;t coded the tiebreaker, our NFC standings lead to incorrect NFC West division winner, putting SEA in the playoffs instead of LA.</p>
+<h3 id=tiebreakers ><a href="#tiebreakers" class=header-anchor >Tiebreakers</a></h3>
+<p>The <a href="https://www.nfl.com/standings/tie-breaking-procedures">tiebreaking algorithm</a> requires a number of pair-wise calculations between the tied teams. It would be challenging to do an exhaustive calculation of these values and conduct a multi-column sort.<sup id="fnref:4"><a href="#fndef:4" class=fnref >[4]</a></sup></p>
+<p>As it turns out, LA and SEA have the same head-to-head record, division record, common record, and conference record. The tie is only broken with strength of victory. Implementing this correctly would require quite a bit more code than shown here. This may be addressed in a future tutorial.</p>
+<hr />
+<p><table class=fndef  id="fndef:1">
+    <tr>
+        <td class=fndef-backref ><a href="#fnref:1">[1]</a>
+        <td class=fndef-content >Depending on what you expect to get from this tutorial, this may be a good use case for a <a href="https://pkgdocs.julialang.org/v1/environments/#Temporary-environments">temporary environment</a>.
+    
+</table>
+<table class=fndef  id="fndef:2">
+    <tr>
+        <td class=fndef-backref ><a href="#fnref:2">[2]</a>
+        <td class=fndef-content >This example requires <code>using Statistics</code>.
+    
+</table>
+<table class=fndef  id="fndef:3">
+    <tr>
+        <td class=fndef-backref ><a href="#fnref:3">[3]</a>
+        <td class=fndef-content >For a detailed explanation of &quot;wide&quot; and &quot;long&quot; formats, DataFrames.jl has a section about <a href="https://dataframes.juliadata.org/stable/man/reshaping_and_pivoting/">reshaping data</a>.
+    
+</table>
+<table class=fndef  id="fndef:4">
+    <tr>
+        <td class=fndef-backref ><a href="#fnref:4">[4]</a>
+        <td class=fndef-content >Up to the coin-toss, the tiebreaking algorithm could probably be structured as an <a href="https://docs.julialang.org/en/v1/base/sort/#Alternate-Orderings">alternate ordering</a>. That is <em>way</em> beyond the scope of this tutorial.
+    
+</table>
+</p>
+<div class=page-foot >
+    &#xA9; 2025 <a href="https://github.com/KyleSJohnston">KyleSJohnston</a><br/>
+    Last modified: December 04, 2025.<br/>
+    Website built with <a href="https://github.com/tlienart/Franklin.jl">Franklin.jl</a>, the <a href="https://pure-css.github.io/">pure-sm</a> template, and the <a href="https://julialang.org">Julia programming language</a>.
+</div>
+</div>
+      </div> 
+  </div> 
+  <script src="/libs/pure/ui.min.js"></script>
+  
+  
+      <script src="/libs/highlight/highlight.min.js"></script>
+<script>hljs.highlightAll();hljs.configure({tabReplace: '    '});</script>

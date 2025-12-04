@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<rss version="2.0"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:media="http://search.yahoo.com/mrss/"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss">
+
+  <channel>
+    <title>
+      <![CDATA[  Football.town  ]]>
+    </title>
+    <link> https://www.football.town/ </link>
+    <description>
+      <![CDATA[  Football analytics in Julia  ]]>
+    </description>
+    <atom:link
+      href="https://www.football.town/feed.xml"
+      rel="self"
+      type="application/rss+xml" />
+
+
+<item>
+  <title>
+    <![CDATA[  Week 14 Games  ]]>
+  </title>
+  <link> https://www.football.town/posts/20251204_preview_2025_15/index.html </link>
+  <guid> https://www.football.town/posts/20251204_preview_2025_15/index.html </guid>
+  <description>
+    <![CDATA[  The schedule and spread for week 14 of the 2025 NFL season.  ]]>
+  </description>  
+    
+  <pubDate>Thu, 04 Dec 2025 00:00:00 +0000</pubDate>  
+  
+  <author> KyleSJohnston </author>
+  
+  
+  <atom:author>
+    <atom:name>KyleSJohnston</atom:name>
+  </atom:author>
+        
+</item>
+</channel></rss>

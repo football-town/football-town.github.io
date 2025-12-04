@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<rss version="2.0"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:media="http://search.yahoo.com/mrss/"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss">
+
+  <channel>
+    <title>
+      <![CDATA[  Football.town  ]]>
+    </title>
+    <link> https://www.football.town/ </link>
+    <description>
+      <![CDATA[  Football analytics in Julia  ]]>
+    </description>
+    <atom:link
+      href="https://www.football.town/feed.xml"
+      rel="self"
+      type="application/rss+xml" />
+
+
+<item>
+  <title>
+    <![CDATA[  football.town  ]]>
+  </title>
+  <link> https://www.football.town/index.html </link>
+  <guid> https://www.football.town/index.html </guid>
+  <description>
+    <![CDATA[  A page devoted to football analytics  ]]>
+  </description>  
+    
+  <pubDate>Thu, 04 Dec 2025 00:00:00 +0000</pubDate>  
+  
+  
+  <atom:author>
+    <atom:name>KyleSJohnston</atom:name>
+  </atom:author>
+        
+</item>
+</channel></rss>
