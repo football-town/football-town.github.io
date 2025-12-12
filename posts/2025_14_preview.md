@@ -8,7 +8,7 @@ tags = ["updates", "preview"]
 pinned = false
 +++
 
-```!
+```julia:code/preview
 #hideall
 using Chain
 using DataFrames
@@ -16,14 +16,7 @@ using Dates
 using NFLData
 using Printf
 
-function stringify_time(wd, gt)
-    wd_str = wd[1:3]
-    gt_str = Dates.format(gt, "I:MM p")
-    return "$wd_str $gt_str"
-end
-
-stringify_spread(spread) = Printf.@sprintf "%+.1f" spread
-stringify_game(away, home) = "$away @ $home"
+include("src/common.jl")
 
 @chain load_schedules() begin
     subset(
@@ -42,3 +35,5 @@ stringify_game(away, home) = "$away @ $home"
     )
 end
 ```
+
+\show{code/preview}
