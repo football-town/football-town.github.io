@@ -25,8 +25,8 @@
   <title>
     <![CDATA[  Conference Standings  ]]>
   </title>
-  <link> https://www.football.town/posts/20251202_standings_tutorial/index.html </link>
-  <guid> https://www.football.town/posts/20251202_standings_tutorial/index.html </guid>
+  <link> https://www.football.town/posts/standings_tutorial/index.html </link>
+  <guid> https://www.football.town/posts/standings_tutorial/index.html </guid>
   <description>
     <![CDATA[  A brief tutorial to demonstrate how NFLData.jl and DataFrames.jl can be used to compute AFC and NFC standings.  ]]>
   </description>  
