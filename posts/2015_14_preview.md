@@ -8,7 +8,7 @@ tags = ["updates", "preview"]
 pinned = false
 +++
 
-```!
+```julia:code/preview
 #hideall
 using Chain
 using DataFrames
@@ -42,3 +42,5 @@ stringify_game(away, home) = "$away @ $home"
     )
 end
 ```
+
+\show{code/preview}
