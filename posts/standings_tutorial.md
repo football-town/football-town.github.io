@@ -5,6 +5,7 @@ rss_pubdate = Date(2025, 12, 2)
 rss = "A brief tutorial to demonstrate how NFLData.jl and DataFrames.jl can be used to compute AFC and NFC standings."
 rss_author = "KyleSJohnston"
 tags = ["tutorials"]
+pinned = true
 +++
 
 Any regular-season analysis of the NFL would be incomplete without some awareness of the conference standings.
