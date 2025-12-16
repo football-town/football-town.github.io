@@ -23,6 +23,27 @@
 
 <item>
   <title>
+    <![CDATA[  Week 16 Games  ]]>
+  </title>
+  <link> https://www.football.town/posts/2025_16_preview/index.html </link>
+  <guid> https://www.football.town/posts/2025_16_preview/index.html </guid>
+  <description>
+    <![CDATA[  The schedule and spread for week 16 of the 2025 NFL season.  ]]>
+  </description>  
+    
+  <pubDate>Tue, 16 Dec 2025 00:00:00 +0000</pubDate>  
+  
+  <author> KyleSJohnston </author>
+  
+  
+  <atom:author>
+    <atom:name>KyleSJohnston</atom:name>
+  </atom:author>
+        
+</item>
+
+<item>
+  <title>
     <![CDATA[  Week 15 Games  ]]>
   </title>
   <link> https://www.football.town/posts/2025_15_preview/index.html </link>
@@ -65,25 +86,6 @@
 
 <item>
   <title>
-    <![CDATA[  football.town  ]]>
-  </title>
-  <link> https://www.football.town/index.html </link>
-  <guid> https://www.football.town/index.html </guid>
-  <description>
-    <![CDATA[  A page devoted to football analytics  ]]>
-  </description>  
-    
-  <pubDate>Thu, 04 Dec 2025 00:00:00 +0000</pubDate>  
-  
-  
-  <atom:author>
-    <atom:name>KyleSJohnston</atom:name>
-  </atom:author>
-        
-</item>
-
-<item>
-  <title>
     <![CDATA[  Conference Standings  ]]>
   </title>
   <link> https://www.football.town/posts/standings_tutorial/index.html </link>
@@ -95,6 +97,25 @@
   <pubDate>Tue, 02 Dec 2025 00:00:00 +0000</pubDate>  
   
   <author> KyleSJohnston </author>
+  
+  
+  <atom:author>
+    <atom:name>KyleSJohnston</atom:name>
+  </atom:author>
+        
+</item>
+
+<item>
+  <title>
+    <![CDATA[  football.town  ]]>
+  </title>
+  <link>  </link>
+  <guid>  </guid>
+  <description>
+    <![CDATA[  A page devoted to football analytics  ]]>
+  </description>  
+    
+  <pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate>  
   
   
   <atom:author>
