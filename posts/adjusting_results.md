@@ -190,16 +190,57 @@ Down by eight:
 
 Neither of these are especially elegant; there's no point in trying to simplify further.
 
+## Numerical Solutions
 
-## Utility
+Putting all this together, we can write a function to solve for deficits up to `n`.
 
-Even though the model takes the perspective of the losing team catching up to tie the game, the model is symmetric to winning teams.
+```!
+function deficit_drives(n::Integer, p₃::AbstractFloat, p₆::AbstractFloat, p₁::AbstractFloat, p₂::AbstractFloat)
+    f = zeros(n)
+    f₁ = zeros(n)
+    f₂ = zeros(n)
+    
+    p₀ = 1 - p₃ - p₆
 
-$$ f(-x) = -f(x) $$
+    for i in eachindex(f)
+        f_fg = i > 3 ? f[i-3] : 0
+        f_td = i > 6 ? min(f₁[i-6], f₂[i-6]) : 0
+        f[i] = (1 + p₃ * f_fg + p₆ * f_td) / (p₃ + p₆)
 
-This has the added benefit of keeping games zero-sum.
+        f_make = i > 1 ? f[i-1] : 0
+        f₁[i] = p₁ * f_make + (1 - p₁) * f[i]
+
+        f_success = i > 2 ? f[i-2] : 0
+        f₂[i] = p₂ * f_success + (1 - p₂) * f[i]
+    end
+
+    return f, f₁, f₂
+end
+```
+
+I've reviewed drive, extra-point, and two-point conversion outcomes using play-by-play data from NFLData.jl.
+The probabilities are rounded approximations of regular season outcomes between 2020 and 2024.[^estimation]
+
+```!
+using DataFrames
+
+p₆ = 0.24
+p₃ = 0.16
+p₁ = 0.96
+p₂ = 0.48
+
+(f, f1, f2) = deficit_drives(30, p₃, p₆, p₁, p₂)
+results_df = DataFrame(:f => f, :f1 => f1, :f2 => f2)
+```
+
+Some interpretations:
+- If, after a touchdown, you are down by 1, 4, 7, or 8, kick the extra point.
+- If, after a touchdown, you are down by 2, 5, or 10, attempt the two-point conversion.
+- For small deficits (<10), the ...
+- For larger deficits (>20), the resulting values are more continuous, with each point requiring approximately 0.45 drives to overcome.
 
 ---
 
 [^safety]: Safeties are infrequent, and they're scored by the defense instead of the offense.
 [^negation]: You could argue that $ x $ should be negative for a deficit, but we want $ f(x) $ to have the same sign as $ x $.
+[^estimation]: Finding the best estimates of the input probabilities is left for future work. These are meant to be illustrative. I have excluded drives that end the half, but I haven't excluded the final drive of every half.
