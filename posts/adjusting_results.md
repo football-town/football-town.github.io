@@ -188,6 +188,8 @@ Down by eight:
     f(8) &=& \frac{ 1 + p_3 f(4) + p_6 f(1) - p_6 p_2 f(1) }{ p_3 + p_6 }
 \end{eqnarray}
 
+The difference between the two is proportional to the difference between $ p_1 $ and $ p_2 $.
+
 Neither of these are especially elegant; there's no point in trying to simplify further.
 
 ## Numerical Solutions
@@ -200,8 +202,6 @@ function deficit_drives(n::Integer, p₃::AbstractFloat, p₆::AbstractFloat, p�
     f₁ = zeros(n)
     f₂ = zeros(n)
     
-    p₀ = 1 - p₃ - p₆
-
     for i in eachindex(f)
         f_fg = i > 3 ? f[i-3] : 0
         f_td = i > 6 ? min(f₁[i-6], f₂[i-6]) : 0
@@ -233,14 +233,45 @@ p₂ = 0.48
 results_df = DataFrame(:f => f, :f1 => f1, :f2 => f2)
 ```
 
-Some interpretations:
-- If, after a touchdown, you are down by 1, 4, 7, or 8, kick the extra point.
-- If, after a touchdown, you are down by 2, 5, or 10, attempt the two-point conversion.
-- For small deficits (<10), the ...
-- For larger deficits (>20), the resulting values are more continuous, with each point requiring approximately 0.45 drives to overcome.
+```!
+using AlgebraOfGraphics
+using CairoMakie
+
+figure = draw(
+    data(results_df) *
+    mapping(direct(1:nrow(results_df)) => :x, :f) *
+    visual(Lines)
+)
+
+save(joinpath(@OUTPUT, "figure.png"), figure) # hide
+```
+
+\fig{figure}
+
+### Observations
+
+When it's more than a two-score game (>16 points), $ f(x) $ is essentially linear with $ x $.
+This will have no effect on results for many analyses (i.e.: regression).
+
+_Any value in $ f(x) $ has to be in close games._[^two]
+
+In brief:
+- Losing by one, losing by two, and losing by three are all the same degree of loss. The same is true for losing by four, five, or six.
+- Losing by 15 is approximately twice as bad as losing by 7.
+- Losing by 9 is about 50% worse than losing by 6; it is also 50% worse than losing by 4.
+
+Some of these properties seem to match intuition.
+None of them are compelling enough to know if $ f(x) $ is more descriptive than the score.
+(In fact, one could argue that collapsing several point differentials into a single number is _less_ descriptive.)
+Were $ f(x) $ applied to improve some other analysis, it might be easier to see whether it adds any value.
+
+### Next Steps
+
+What do we do?
 
 ---
 
 [^safety]: Safeties are infrequent, and they're scored by the defense instead of the offense.
 [^negation]: You could argue that $ x $ should be negative for a deficit, but we want $ f(x) $ to have the same sign as $ x $.
 [^estimation]: Finding the best estimates of the input probabilities is left for future work. These are meant to be illustrative. I have excluded drives that end the half, but I haven't excluded the final drive of every half.
+[^two]: `f1` and `f2` in the dataframe provide some insight into when teams would attempt the two-point conversion, and the results are largely consistent with standard practice to the extent that minimizing drives and maximizing win-probability are the same.
