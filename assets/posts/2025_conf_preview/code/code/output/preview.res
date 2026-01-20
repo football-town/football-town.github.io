@@ -1,8 +1,6 @@
-4×4 DataFrame
+2×4 DataFrame
  Row │ when         spread  description  total
      │ String       String  String       Float64
 ─────┼───────────────────────────────────────────
-   1 │ Sat 4:30 PM   +1.5   BUF @ DEN       45.5
-   2 │ Sat 8:00 PM   +6.5   SF @ SEA        44.5
-   3 │ Sun 3:00 PM   +3.0   HOU @ NE        40.5
-   4 │ Sun 6:30 PM   -3.5   LA @ CHI        49.5
+   1 │ Sun 3:00 PM   -5.5   NE @ DEN        41.5
+   2 │ Sun 6:30 PM   +2.5   LA @ SEA        47.5
